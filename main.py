@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+
+#  Copyright (c) 2024. IPCRC, Lab. Jiangnig Wei
+#  All rights reserved
+
 from __future__ import print_function
 
 import argparse
@@ -25,12 +29,13 @@ import yaml
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
 
-from torchlight import DictAction
-
+# from torchlight import DictAction
 
 import resource
+
 rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
 resource.setrlimit(resource.RLIMIT_NOFILE, (2048, rlimit[1]))
+
 
 def init_seed(seed):
     torch.cuda.manual_seed_all(seed)
@@ -41,6 +46,7 @@ def init_seed(seed):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
+
 def import_class(import_str):
     mod_str, _sep, class_str = import_str.rpartition('.')
     __import__(mod_str)
@@ -48,6 +54,7 @@ def import_class(import_str):
         return getattr(sys.modules[mod_str], class_str)
     except AttributeError:
         raise ImportError('Class %s cannot be found (%s)' % (class_str, traceback.format_exception(*sys.exc_info())))
+
 
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
@@ -127,12 +134,12 @@ def get_parser():
         help='the number of worker for data loader')
     parser.add_argument(
         '--train-feeder-args',
-        action=DictAction,
+        # action=DictAction,
         default=dict(),
         help='the arguments of data loader for training')
     parser.add_argument(
         '--test-feeder-args',
-        action=DictAction,
+        # action=DictAction,
         default=dict(),
         help='the arguments of data loader for test')
 
@@ -140,7 +147,7 @@ def get_parser():
     parser.add_argument('--model', default=None, help='the model will be used')
     parser.add_argument(
         '--model-args',
-        action=DictAction,
+        # action=DictAction,
         default=dict(),
         help='the arguments of model')
     parser.add_argument(
@@ -417,14 +424,16 @@ class Processor():
             for k, v in timer.items()
         }
         self.print_log(
-            '\tMean training loss: {:.4f}.  Mean training acc: {:.2f}%.'.format(np.mean(loss_value), np.mean(acc_value)*100))
+            '\tMean training loss: {:.4f}.  Mean training acc: {:.2f}%.'.format(np.mean(loss_value),
+                                                                                np.mean(acc_value) * 100))
         self.print_log('\tTime consumption: [Data]{dataloader}, [Network]{model}'.format(**proportion))
 
         if save_model:
             state_dict = self.model.state_dict()
             weights = OrderedDict([[k.split('module.')[-1], v.cpu()] for k, v in state_dict.items()])
 
-            torch.save(weights, self.arg.model_saved_name + '-' + str(epoch+1) + '-' + str(int(self.global_step)) + '.pt')
+            torch.save(weights,
+                       self.arg.model_saved_name + '-' + str(epoch + 1) + '-' + str(int(self.global_step)) + '.pt')
 
     def eval(self, epoch, save_score=False, loader_name=['test'], wrong_file=None, result_file=None):
         if wrong_file is not None:
@@ -505,23 +514,25 @@ class Processor():
         if self.arg.phase == 'train':
             self.print_log('Parameters:\n{}\n'.format(str(vars(self.arg))))
             self.global_step = self.arg.start_epoch * len(self.data_loader['train']) / self.arg.batch_size
+
             def count_parameters(model):
                 return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
             self.print_log(f'# Parameters: {count_parameters(self.model)}')
             for epoch in range(self.arg.start_epoch, self.arg.num_epoch):
                 save_model = (((epoch + 1) % self.arg.save_interval == 0) or (
-                        epoch + 1 == self.arg.num_epoch)) and (epoch+1) > self.arg.save_epoch
+                        epoch + 1 == self.arg.num_epoch)) and (epoch + 1) > self.arg.save_epoch
 
                 self.train(epoch, save_model=save_model)
 
                 self.eval(epoch, save_score=self.arg.save_score, loader_name=['test'])
 
             # test the best model
-            weights_path = glob.glob(os.path.join(self.arg.work_dir, 'runs-'+str(self.best_acc_epoch)+'*'))[0]
+            weights_path = glob.glob(os.path.join(self.arg.work_dir, 'runs-' + str(self.best_acc_epoch) + '*'))[0]
             weights = torch.load(weights_path)
             if type(self.arg.device) is list:
                 if len(self.arg.device) > 1:
-                    weights = OrderedDict([['module.'+k, v.cuda(self.output_device)] for k, v in weights.items()])
+                    weights = OrderedDict([['module.' + k, v.cuda(self.output_device)] for k, v in weights.items()])
             self.model.load_state_dict(weights)
 
             wf = weights_path.replace('.pt', '_wrong.txt')
@@ -529,7 +540,6 @@ class Processor():
             self.arg.print_log = False
             self.eval(epoch=0, save_score=True, loader_name=['test'], wrong_file=wf, result_file=rf)
             self.arg.print_log = True
-
 
             num_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
             self.print_log(f'Best accuracy: {self.best_acc}')
@@ -554,6 +564,7 @@ class Processor():
             self.eval(epoch=0, save_score=self.arg.save_score, loader_name=['test'], wrong_file=wf, result_file=rf)
             self.print_log('Done.\n')
 
+
 if __name__ == '__main__':
     parser = get_parser()
 
@@ -561,7 +572,7 @@ if __name__ == '__main__':
     p = parser.parse_args()
     if p.config is not None:
         with open(p.config, 'r') as f:
-            default_arg = yaml.load(f)
+            default_arg = yaml.safe_load(f)
         key = vars(p).keys()
         for k in default_arg.keys():
             if k not in key:
